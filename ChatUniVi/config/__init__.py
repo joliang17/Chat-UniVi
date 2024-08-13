@@ -4,7 +4,9 @@ from .model_config import *
 
 ModelConfig = {
     "PRETUNE": model_config_pretune,
+    "PRETUNE_MOT": model_config_pretune_motion,
     "FINETUNE": model_config_finetune,
+    "FINETUNE_MOT": model_config_finetune_motion,
 }
 
 

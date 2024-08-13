@@ -12,7 +12,7 @@ ChatUniVi/train/train_mem.py \
 --deepspeed scripts/zero3.json \
 --model_name_or_path ${LLM_path} \
 --version v1 \
---model_use PRETUNE \
+--model_use PRETUNE_MOT \
 --dataset_use Pretrain \
 --vision_tower openai/clip-vit-large-patch14-336 \
 --tune_mm_mlp_adapter True \

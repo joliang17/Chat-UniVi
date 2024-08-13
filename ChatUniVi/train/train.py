@@ -52,6 +52,7 @@ class ModelArguments:
     vision_tower: Optional[str] = field(default=None)
     mm_vision_select_layer: Optional[int] = field(default=-1)  # default to the last layer
     pretrain_mm_mlp_adapter: Optional[str] = field(default=None)
+    pretrain_mm_masking: Optional[str] = field(default=None)
     mm_use_im_start_end: bool = field(default=False)
     mm_use_im_patch_token: bool = field(default=True)
     mm_vision_select_feature: Optional[str] = field(default="patch")
@@ -1157,10 +1158,18 @@ def train():
 
         model.config.config = model_config
         model_args.use_cluster = model_config["use_cluster"]
-        model_args.spatial_cluster_rate0 = model_config["spatial_cluster_rate0"]
-        model_args.spatial_cluster_rate1 = model_config["spatial_cluster_rate1"]
-        model_args.spatial_cluster_rate2 = model_config["spatial_cluster_rate2"]
+        model_args.spatial_cluster_rate0 = model_config.get("spatial_cluster_rate0", 64)
+        model_args.spatial_cluster_rate1 = model_config.get("spatial_cluster_rate1", 32)
+        model_args.spatial_cluster_rate2 = model_config.get("spatial_cluster_rate2", 16)
         model_args.temporal_cluster_rate = model_config.get("temporal_cluster_rate", 1 / 16)
+
+        model_args.use_masking = model_config["use_masking"]
+        model_args.num_patches = model_config.get("num_patches", 256)
+        model_args.num_layers = model_config.get("num_layers", 2)
+        model_args.num_head = model_config.get("num_head", 16)
+        model_args.mask_ratio = model_config.get("mask_ratio", 0.9)
+        model_args.use_learnable_pos_emb = model_config.get("use_learnable_pos_emb", False)
+
         model.get_model().initialize_cluster_modules(model_args)
 
         if model_args.use_cluster:
@@ -1168,9 +1177,14 @@ def train():
                 if "block" in n or "ctm" in n:
                     p.requires_grad = True
 
+        if model_args.use_masking:
+            for n, p in model.named_parameters():
+                if "masking" in n:
+                    p.requires_grad = True
+
         if model.config.config["freeze"]:
             for n, p in model.named_parameters():
-                if "block" not in n and "ctm" not in n:
+                if "block" not in n and "ctm" not in n or 'masking' not in n:
                     p.requires_grad = False
 
             if model.config.config["mm_tune"]:

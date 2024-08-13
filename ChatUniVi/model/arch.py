@@ -4,6 +4,7 @@ import torch.nn as nn
 from .multimodal_encoder.builder import build_vision_tower
 from ChatUniVi.constants import *
 from .cluster import CTM, TCBlock
+from .masking import MHAMasking
 from collections import OrderedDict
 from .multimodal_projector.builder import build_vision_projector
 
@@ -30,8 +31,14 @@ class MetaModel:
 
                 self.ctm3 = CTM(sample_ratio=config.config["temporal_cluster_rate"], embed_dim=self.config.mm_hidden_size, dim_out=self.config.mm_hidden_size, k=5)
                 self.block3 = TCBlock(dim=self.config.mm_hidden_size, num_heads=8)
+
+            self.use_masking = config.config["use_masking"]
+            if self.use_masking:
+                self.masking = MHAMasking(embed_dim=self.config.mm_hidden_size, n_patches=config.config["num_patches"], n_layers=config.config["num_layers"], n_head=config.config["num_head"], mask_ratio=config.config["mask_ratio"], use_learnable_pos_emb=config.config["use_learnable_pos_emb"])
+
         else:
             self.use_cluster = False
+            self.use_masking = False
 
     def get_vision_tower(self):
         vision_tower = getattr(self, 'vision_tower', None)
@@ -85,6 +92,20 @@ class MetaModel:
             self.ctm3 = CTM(sample_ratio=model_args.temporal_cluster_rate, embed_dim=self.config.mm_hidden_size, dim_out=self.config.mm_hidden_size, k=5)
             self.block3 = TCBlock(dim=self.config.mm_hidden_size, num_heads=8)
 
+        self.use_masking = model_args.use_masking
+        if self.use_masking:
+            self.masking = MHAMasking(embed_dim=self.config.mm_hidden_size, n_patches=model_args.num_patches, n_layers=model_args.num_layers, n_head=model_args.num_head, mask_ratio=model_args.mask_ratio, use_learnable_pos_emb=model_args.use_learnable_pos_emb)
+            
+            pretrain_mm_masking = model_args.pretrain_mm_masking
+            if pretrain_mm_masking is not None:
+                masking_weights = torch.load(pretrain_mm_masking, map_location='cpu')
+                if 'model_state_dict' in masking_weights:
+                    masking_weights = masking_weights['model_state_dict']
+                def get_w(weights, keyword):
+                    return {k.split(keyword + '.')[1]: v for k, v in weights.items() if keyword in k}
+
+                self.masking.load_state_dict(get_w(masking_weights, 'masking_module'))
+
 
 class ChatUniViMetaForCausalLM(ABC):
     @abstractmethod
@@ -109,7 +130,26 @@ class ChatUniViMetaForCausalLM(ABC):
         return x
 
     def project(self, image_features, input_type="image"):
-        if self.get_model().use_cluster:
+        if self.get_model().use_masking:
+            if input_type == "video":
+                # TODO: here
+                # 多帧图片
+                # image_features: [T, N, D]
+                t, n, d = image_features.shape
+                # masked_features shape: [1, T-1, N', D]
+                _, masked_features, _ = self.get_model().masking(image_features.unsqueeze(0))
+                # masked_features shape: [T-1, N', D]
+                masked_features = masked_features.squeeze(0)
+                t_new, s, d = masked_features.shape
+
+                # base_features shape: [1, N, D]
+                base_features = image_features[0].unsqueeze(0)
+
+                # concat: [N + (T-1) * N', D]
+                concat_features = torch.concat([base_features, masked_features], dim=-2)
+                image_features = concat_features
+
+        elif self.get_model().use_cluster:
             if input_type == "image":
                 cluster_image_features = []
                 token_dict = {'x': image_features,
@@ -207,7 +247,6 @@ class ChatUniViMetaForCausalLM(ABC):
 
                 image_features = torch.cat(cluster_image_features, dim=1)
                 image_features = image_features.to(self.get_model().mm_projector.weight.dtype)
-
         else:
             if input_type == "video":
                 image_features, cls_features = torch.mean(image_features, dim=0, keepdim=False).unsqueeze(
