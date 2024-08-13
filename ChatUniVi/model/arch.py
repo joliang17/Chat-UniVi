@@ -361,13 +361,12 @@ class ChatUniViMetaForCausalLM(ABC):
                             cur_new_labels.append(cur_labels[image_token_end:image_token_end + 1])
                             cur_labels = cur_labels[image_token_end + 2:]
                     else:
-                        import pdb;pdb.set_trace()
                         cur_new_input_embeds.append(self.get_model().embed_tokens(cur_input_ids[:image_token_start]))
                         cur_new_input_embeds.append(cur_image_features)
                         if labels is not None:
                             cur_new_labels.append(cur_labels[:image_token_start])
                             cur_new_labels.append(torch.full((cur_image_features.shape[0],), IGNORE_INDEX, device=labels.device, dtype=labels.dtype))
-                            import pdb;pdb.set_trace()
+                            # TODO: here??
                             cur_labels = cur_labels[image_token_end + 1:]
 
                 if getattr(self.config, 'tune_mm_mlp_adapter', False) and getattr(self.config, 'mm_use_im_start_end',
@@ -464,6 +463,8 @@ class ChatUniViMetaForCausalLM(ABC):
                 attention_mask = torch.cat((new_attn_mask_pad_left, attention_mask), dim=1)
                 assert attention_mask.shape == new_input_embeds.shape[:2]
 
+        if new_input_embeds.shape[1] != new_labels.shape[1]:
+            import pdb;pdb.set_trace()
         return None, attention_mask, past_key_values, new_input_embeds, new_labels
 
     def initialize_vision_tokenizer(self, model_args, tokenizer):
