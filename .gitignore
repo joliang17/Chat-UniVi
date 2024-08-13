@@ -1,0 +1,16 @@
+__pycache__
+
+checkpoints/
+stable-diffusion-v1-5/
+wandb/
+sample*/
+instruct-pix2pix/
+Stablediffusion3/
+DINOv2/
+
+# log file
+*.log
+*.out
+log/*
+
+.idea/
