@@ -29,10 +29,11 @@ model_config_finetune = {
 model_config_pretune_motion = {
     "use_masking": True,
     "use_cluster": False,
+    "use_ada": True,
     "freeze": False,
     "vision_tune": False,
 
-    "num_patches": 256, 
+    "num_patches": 576, 
     "num_layers": 2,
     "num_head": 16, 
     "mask_ratio": 0.9,
@@ -42,11 +43,12 @@ model_config_pretune_motion = {
 model_config_finetune_motion = {
     "use_masking": True,
     "use_cluster": False,
+    "use_ada": False,
     "freeze": False,
     "mm_tune": True,
     "vision_tune": False,
 
-    "num_patches": 256, 
+    "num_patches": 576, 
     "num_layers": 2,
     "num_head": 16, 
     "mask_ratio": 0.9,

@@ -184,6 +184,8 @@ def safe_save_model_for_hf_trainer(trainer: transformers.Trainer,
         keys_to_match = ['mm_projector', "ctm", "block"]
         if getattr(trainer.args, "use_im_start_end", False):
             keys_to_match.extend(['embed_tokens', 'embed_in'])
+        if getattr(trainer.args, "tune_mm_masking", False):
+            keys_to_match.extend(['masking', ])
 
         weight_to_save = get_mm_adapter_state_maybe_zero_3(trainer.model.named_parameters(), keys_to_match)
         trainer.model.config.save_pretrained(output_dir)
@@ -1164,6 +1166,7 @@ def train():
         model_args.temporal_cluster_rate = model_config.get("temporal_cluster_rate", 1 / 16)
 
         model_args.use_masking = model_config["use_masking"]
+        model_args.use_ada = model_config.get("use_ada", False)
         model_args.num_patches = model_config.get("num_patches", 256)
         model_args.num_layers = model_config.get("num_layers", 2)
         model_args.num_head = model_config.get("num_head", 16)

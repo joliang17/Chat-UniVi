@@ -4,7 +4,7 @@ import torch.nn as nn
 from .multimodal_encoder.builder import build_vision_tower
 from ChatUniVi.constants import *
 from .cluster import CTM, TCBlock
-from .masking import MHAMasking
+from .masking import MHAMasking, AdaMAEMasking
 from collections import OrderedDict
 from .multimodal_projector.builder import build_vision_projector
 
@@ -33,8 +33,16 @@ class MetaModel:
                 self.block3 = TCBlock(dim=self.config.mm_hidden_size, num_heads=8)
 
             self.use_masking = config.config["use_masking"]
+
             if self.use_masking:
-                self.masking = MHAMasking(embed_dim=self.config.mm_hidden_size, n_patches=config.config["num_patches"], n_layers=config.config["num_layers"], n_head=config.config["num_head"], mask_ratio=config.config["mask_ratio"], use_learnable_pos_emb=config.config["use_learnable_pos_emb"])
+                if hasattr(config.config, "use_ada"):
+                    self.use_ada = config.config["use_ada"]
+                else:
+                    self.use_ada = False
+                if not self.use_ada:
+                    self.masking = MHAMasking(embed_dim=self.config.mm_hidden_size, n_patches=config.config["num_patches"], n_layers=config.config["num_layers"], n_head=config.config["num_head"], mask_ratio=config.config["mask_ratio"], use_learnable_pos_emb=config.config["use_learnable_pos_emb"])
+                else:
+                    self.masking = AdaMAEMasking(embed_dim=self.config.mm_hidden_size, n_patches=config.config["num_patches"], mask_ratio=config.config["mask_ratio"], use_learnable_pos_emb=config.config["use_learnable_pos_emb"])
 
         else:
             self.use_cluster = False
@@ -94,8 +102,16 @@ class MetaModel:
 
         self.use_masking = model_args.use_masking
         if self.use_masking:
-            self.masking = MHAMasking(embed_dim=self.config.mm_hidden_size, n_patches=model_args.num_patches, n_layers=model_args.num_layers, n_head=model_args.num_head, mask_ratio=model_args.mask_ratio, use_learnable_pos_emb=model_args.use_learnable_pos_emb)
-            
+            if hasattr(model_args, "use_ada"):
+                self.use_ada = model_args.use_ada
+            else:
+                self.use_ada = False
+                
+            if not self.use_ada:
+                self.masking = MHAMasking(embed_dim=self.config.mm_hidden_size, n_patches=model_args.num_patches, n_layers=model_args.num_layers, n_head=model_args.num_head, mask_ratio=model_args.mask_ratio, use_learnable_pos_emb=model_args.use_learnable_pos_emb)
+            else:
+                self.masking = AdaMAEMasking(embed_dim=self.config.mm_hidden_size, n_patches=model_args.num_patches, mask_ratio=model_args.mask_ratio, use_learnable_pos_emb=model_args.use_learnable_pos_emb)
+
             pretrain_mm_masking = model_args.pretrain_mm_masking
             if pretrain_mm_masking is not None:
                 masking_weights = torch.load(pretrain_mm_masking, map_location='cpu')
@@ -132,22 +148,28 @@ class ChatUniViMetaForCausalLM(ABC):
     def project(self, image_features, input_type="image"):
         if self.get_model().use_masking:
             if input_type == "video":
-                # TODO: here
                 # 多帧图片
                 # image_features: [T, N, D]
-                t, n, d = image_features.shape
-                # masked_features shape: [1, T-1, N', D]
+                # masked_features shape: [1, T_new, N', D]
                 _, masked_features, _ = self.get_model().masking(image_features.unsqueeze(0))
-                # masked_features shape: [T-1, N', D]
                 masked_features = masked_features.squeeze(0)
-                t_new, s, d = masked_features.shape
+                if not self.get_model().use_ada:
+                    # base_features shape: [1, N, D]
+                    _, _, D = masked_features.shape
+                    base_features = image_features[0]
+                    masked_features = masked_features.reshape(-1, D)
 
-                # base_features shape: [1, N, D]
-                base_features = image_features[0].unsqueeze(0)
+                    # masked_features shape: [T-1, N', D]
+                    # image_features: [N + (T-1) * N', D]
+                    concat_features = torch.concat([base_features, masked_features], dim=-2)
+                    t, l, n = concat_features.size()
+                    image_features = concat_features.reshape(t * l, n)
 
-                # concat: [N + (T-1) * N', D]
-                concat_features = torch.concat([base_features, masked_features], dim=-2)
-                image_features = concat_features
+                else:
+                    # image_features: [N', D]
+                    _, D = masked_features.shape
+                    masked_features = masked_features.reshape(-1, D)
+                    image_features = masked_features
 
         elif self.get_model().use_cluster:
             if input_type == "image":
@@ -320,13 +342,13 @@ class ChatUniViMetaForCausalLM(ABC):
                     if len(i) > 2:
                         cur_image_features = torch.stack(cur_image_features, dim=0)
                         cur_image_features = self.project(cur_image_features, input_type="video")
-                        t, l, n = cur_image_features.size()
-                        cur_image_features = cur_image_features.contiguous().view(t * l, n)
+
                     else:
                         cur_image_features = torch.stack(cur_image_features, dim=0)
                         cur_image_features = self.project(cur_image_features, input_type="image")
-                        t, l, n = cur_image_features.size()
-                        cur_image_features = cur_image_features.contiguous().view(t * l, n)
+                    
+                    n = cur_image_features.size()[-1]
+                    cur_image_features = cur_image_features.contiguous().reshape(-1, n)
 
                     if getattr(self.config, 'tune_mm_mlp_adapter', False) and getattr(self.config, 'mm_use_im_start_end', False):
                         cur_new_input_embeds.append(self.get_model().embed_tokens(cur_input_ids[:image_token_start - 1]).detach())
@@ -339,11 +361,13 @@ class ChatUniViMetaForCausalLM(ABC):
                             cur_new_labels.append(cur_labels[image_token_end:image_token_end + 1])
                             cur_labels = cur_labels[image_token_end + 2:]
                     else:
+                        import pdb;pdb.set_trace()
                         cur_new_input_embeds.append(self.get_model().embed_tokens(cur_input_ids[:image_token_start]))
                         cur_new_input_embeds.append(cur_image_features)
                         if labels is not None:
                             cur_new_labels.append(cur_labels[:image_token_start])
                             cur_new_labels.append(torch.full((cur_image_features.shape[0],), IGNORE_INDEX, device=labels.device, dtype=labels.dtype))
+                            import pdb;pdb.set_trace()
                             cur_labels = cur_labels[image_token_end + 1:]
 
                 if getattr(self.config, 'tune_mm_mlp_adapter', False) and getattr(self.config, 'mm_use_im_start_end',
@@ -353,6 +377,7 @@ class ChatUniViMetaForCausalLM(ABC):
                     cur_input_ids = cur_input_ids[image_token_end + 1:]
 
             elif image_token_indices.numel() > 0:
+                # 1 images and not at the beginning
                 cur_image_features = []
                 image_token_start = image_token_indices[0]
                 image_token_end = image_token_indices[-1]

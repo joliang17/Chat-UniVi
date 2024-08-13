@@ -27,6 +27,102 @@ def get_sinusoid_encoding_table(n_position, d_hid):
 
 
 
+class AdaMAEMasking(nn.Module):
+    """
+    AdaMAE masking method
+    """
+
+    def __init__(self, embed_dim: int, n_patches: int,
+                 mask_ratio: float = 0.9, use_learnable_pos_emb=False, norm_layer=nn.LayerNorm, **kwargs):
+        super().__init__()
+        self.embed_dim = embed_dim
+        self.n_patches = n_patches*64
+
+        # TODO: fixed ratio or not
+        self.mask_ratio = mask_ratio
+        self.visible_patches = int(self.n_patches * (1 - mask_ratio))
+        print("No. of visible patches selected for pre-training: {}".format(self.visible_patches))
+
+        if use_learnable_pos_emb:
+            self.pos_embed = nn.Parameter(torch.zeros(1, self.n_patches, embed_dim))
+        else:
+            # sine-cosine positional embeddings
+            self.pos_embed = get_sinusoid_encoding_table(self.n_patches, embed_dim)
+
+        self.norm = norm_layer(embed_dim)
+
+        # Probability prediction network
+        self.pos_embed_probs = nn.Parameter(torch.zeros(1, self.n_patches, embed_dim))
+        self.get_token_probs = nn.Sequential(
+            Block(dim=embed_dim, num_heads=8, mlp_ratio=4., qkv_bias=False,
+                  drop=0.1, attn_drop=0.00, drop_path=0.00, norm_layer=nn.LayerNorm,
+                  init_values=0.),
+            nn.Linear(embed_dim, 1),
+            torch.nn.Flatten(start_dim=1),
+        )
+
+        self.softmax = nn.Softmax(dim=-1)
+
+        if use_learnable_pos_emb:
+            trunc_normal_(self.pos_embed, std=.02)
+
+        self.apply(self._init_weights)
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            nn.init.xavier_uniform_(m.weight)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
+
+    def get_num_layers(self):
+        return len(self.blocks)
+
+    @torch.jit.ignore
+    def no_weight_decay(self):
+        return {'pos_embed', 'cls_token'}
+
+    def get_mask(self, img_feat, ):
+        """
+        img_feat: [B, T*N, D]
+        """
+        img_feat = img_feat + self.pos_embed_probs.type_as(img_feat).to(img_feat.device).clone()  # detach()
+        logits = self.get_token_probs(img_feat)
+        logits = torch.nan_to_num(logits)
+        prob_patch = self.softmax(logits)
+        vis_idx = torch.multinomial(prob_patch, num_samples=self.visible_patches, replacement=False)
+        mask = torch.ones((img_feat.shape[0], img_feat.shape[1])).to(img_feat.device, non_blocking=True)
+        mask.scatter_(dim=-1, index=vis_idx.long(), value=0.0)
+        mask = mask.flatten(1).to(torch.bool)
+        return prob_patch, vis_idx, mask
+
+    def forward(self, image_feat: torch.Tensor, **kwargs):
+        """
+        image_feat: [B, T, N, D]
+        """
+        B, T, N, D = image_feat.shape
+
+        image_feat = image_feat.reshape(B, -1, D)
+
+        # find masked id
+        # mask.shape: B, T*N
+        # prob_patch.shape: [B, T*N]
+        prob_patch, vis_idx, mask = self.get_mask(image_feat)
+
+        # generate masked features
+        # pos_embed.shape: 1, N, D
+        image_feat = image_feat + self.pos_embed.type_as(image_feat).to(image_feat.device).clone().detach()
+
+        B, NT, D1 = image_feat.shape
+        # ~mask means visible shape: B, N2, N2=N*T * mask_ratio
+        next_img_vis = image_feat[~mask].reshape(B, -1, D1)
+        next_img_vis = self.norm(next_img_vis)
+
+        return prob_patch, next_img_vis, mask
+
+
 class MHAMasking(nn.Module):
     """
     Find masking probability with cross attention on f_{t-1} & f_{t}
