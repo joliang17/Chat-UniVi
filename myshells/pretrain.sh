@@ -2,7 +2,10 @@
 export WANDB_PROJECT="videovlm_motion"
 export WANDB_NAME="base_pretrain"
 
+# --pretrain_mm_masking ${motion_ckpt} \
+
 stage1_save_path="/mnt/bn/videovlm/code/themis/checkpoints/base_pretrain/stage1"
+motion_ckpt="/mnt/bn/videovlm/ckpt/video_reconstruction/checkpoints/v2_vatex_smaller/checkpoint_epoch_1_iter2000.pth"
 LLM_path="/mnt/bn/themis/data/LLM/vicuna-7b-v1.5"
 
 deepspeed \
@@ -13,7 +16,7 @@ ChatUniVi/train/train_mem.py \
 --model_name_or_path ${LLM_path} \
 --version v1 \
 --model_use PRETUNE_MOT \
---dataset_use Pretrain \
+--dataset_use FINETUNE \
 --vision_tower openai/clip-vit-large-patch14-336 \
 --tune_mm_mlp_adapter True \
 --mm_vision_select_layer -2 \

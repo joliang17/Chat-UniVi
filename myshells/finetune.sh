@@ -1,11 +1,11 @@
 
 export WANDB_PROJECT="videovlm_motion"
-export WANDB_NAME="test_finetune"
+export WANDB_NAME="motions_finetune"
 
 LLM_path="/mnt/bn/themis/data/LLM/vicuna-7b-v1.5"
 motion_ckpt="/mnt/bn/videovlm/ckpt/video_reconstruction/checkpoints/v2_vatex_smaller/checkpoint_epoch_1_iter2000.pth"
-stage1_save_path="/mnt/bn/videovlm/code/themis/checkpoints/pretrain/stage1"
-stage2_save_path="/mnt/bn/videovlm/code/themis/checkpoints/test_finetune/stage2"
+stage1_save_path="/mnt/bn/videovlm/code/themis/checkpoints/base_pretrain/stage1_4"
+stage2_save_path="/mnt/bn/videovlm/code/themis/checkpoints/motions_finetune/stage2"
 
 deepspeed \
 --include localhost:0 \
