@@ -155,15 +155,14 @@ class ChatUniViMetaForCausalLM(ABC):
                 masked_features = masked_features.squeeze(0)
                 if not self.get_model().use_ada:
                     # base_features shape: [1, N, D]
-                    _, _, D = masked_features.shape
+                    D = masked_features.shape[-1]
                     base_features = image_features[0]
                     masked_features = masked_features.reshape(-1, D)
 
                     # masked_features shape: [T-1, N', D]
                     # image_features: [N + (T-1) * N', D]
                     concat_features = torch.concat([base_features, masked_features], dim=-2)
-                    t, l, n = concat_features.size()
-                    image_features = concat_features.reshape(t * l, n)
+                    image_features = concat_features
 
                 else:
                     # image_features: [N', D]
