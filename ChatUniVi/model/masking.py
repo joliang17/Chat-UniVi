@@ -34,10 +34,11 @@ class AdaMAEMasking(nn.Module):
     """
 
     def __init__(self, embed_dim: int, n_patches: int,
-                 mask_ratio: float = 0.9, use_learnable_pos_emb=False, norm_layer=nn.LayerNorm, **kwargs):
+                 mask_ratio: float = 0.9, use_learnable_pos_emb=False, norm_layer=nn.LayerNorm, padding_to_full=False, **kwargs):
         super().__init__()
         self.embed_dim = embed_dim
         self.n_patches = n_patches*MAX_IMAGE_LENGTH
+        self.padding_to_full = padding_to_full
 
         # TODO: fixed ratio or not
         self.mask_ratio = mask_ratio
@@ -117,8 +118,15 @@ class AdaMAEMasking(nn.Module):
         image_feat = image_feat + self.pos_embed.type_as(image_feat).to(image_feat.device).clone().detach()
 
         B, NT, D1 = image_feat.shape
-        # ~mask means visible shape: B, N2, N2=N*T * mask_ratio
-        next_img_vis = image_feat[~mask].reshape(B, -1, D1)
+        if self.padding_to_full:
+            # replace masking part with zero
+            masking_part = image_feat[mask]
+            image_feat[mask] = torch.zeros_like(masking_part, device=image_feat.device, dtype=image_feat.dtype)
+            next_img_vis = image_feat.reshape(B, -1, D1)
+        else:
+            # ~mask means visible shape: B, N2, N2=N*T * mask_ratio
+            next_img_vis = image_feat[~mask].reshape(B, -1, D1)
+            
         next_img_vis = self.norm(next_img_vis)
 
         return prob_patch, next_img_vis, mask
@@ -130,13 +138,14 @@ class MHAMasking(nn.Module):
     """
 
     def __init__(self, embed_dim: int, n_patches: int, n_layers: int = 6,
-                 n_head: int = 16, mask_ratio: float = 0.9, use_learnable_pos_emb=False, ):
+                 n_head: int = 16, mask_ratio: float = 0.9, use_learnable_pos_emb=False, padding_to_full=False):
         super().__init__()
         self.embed_dim = embed_dim
         self.n_patches = n_patches
         self.n_layers = n_layers
         self.n_head = n_head
-
+        self.padding_to_full = padding_to_full
+        
         # TODO: fixed ratio or not
         self.mask_ratio = mask_ratio
         self.visible_patches = int(n_patches * (1 - mask_ratio))
@@ -204,9 +213,15 @@ class MHAMasking(nn.Module):
         next_img = next_img + self.pos_embed.type_as(next_img).to(next_img.device).clone().detach()
 
         BT, _, D1 = next_img.shape
-        # TODO: ~mask means visible shape: (B * T - 1), N2, N2=N * mask_ratio
-        next_img_vis = next_img[~mask].reshape(BT, -1, D1)
-
+        if self.padding_to_full:
+            # replace masking part with zero
+            masking_part = image_feat[mask]
+            image_feat[mask] = torch.zeros_like(masking_part, device=image_feat.device, dtype=image_feat.dtype)
+            next_img_vis = image_feat.reshape(B, -1, D1)
+        else:
+            # ~mask means visible shape: (B * T - 1), N2, N2=N * mask_ratio
+            next_img_vis = image_feat[~mask].reshape(B, -1, D1)
+            
         next_img_vis = rearrange(next_img_vis, '(b t) k d -> b t k d', b=B, t=T - 1)
         mask = rearrange(mask, '(b t) n -> b t n', b=B, t=T - 1)
 

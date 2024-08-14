@@ -39,10 +39,16 @@ class MetaModel:
                     self.use_ada = config.config["use_ada"]
                 else:
                     self.use_ada = False
-                if not self.use_ada:
-                    self.masking = MHAMasking(embed_dim=self.config.mm_hidden_size, n_patches=config.config["num_patches"], n_layers=config.config["num_layers"], n_head=config.config["num_head"], mask_ratio=config.config["mask_ratio"], use_learnable_pos_emb=config.config["use_learnable_pos_emb"])
+                    
+                if hasattr(config.config, "padding_to_full"):
+                    self.padding_to_full = config.config["padding_to_full"]
                 else:
-                    self.masking = AdaMAEMasking(embed_dim=self.config.mm_hidden_size, n_patches=config.config["num_patches"], mask_ratio=config.config["mask_ratio"], use_learnable_pos_emb=config.config["use_learnable_pos_emb"])
+                    self.padding_to_full = False
+                    
+                if not self.use_ada:
+                    self.masking = MHAMasking(embed_dim=self.config.mm_hidden_size, n_patches=config.config["num_patches"], n_layers=config.config["num_layers"], n_head=config.config["num_head"], mask_ratio=config.config["mask_ratio"], use_learnable_pos_emb=config.config["use_learnable_pos_emb"], padding_to_full=self.padding_to_full)
+                else:
+                    self.masking = AdaMAEMasking(embed_dim=self.config.mm_hidden_size, n_patches=config.config["num_patches"], mask_ratio=config.config["mask_ratio"], use_learnable_pos_emb=config.config["use_learnable_pos_emb"], padding_to_full=self.padding_to_full)
 
         else:
             self.use_cluster = False
@@ -102,15 +108,20 @@ class MetaModel:
 
         self.use_masking = model_args.use_masking
         if self.use_masking:
+            if hasattr(model_args, "padding_to_full"):
+                self.padding_to_full = model_args.padding_to_full
+            else:
+                self.padding_to_full = False
+                
             if hasattr(model_args, "use_ada"):
                 self.use_ada = model_args.use_ada
             else:
                 self.use_ada = False
                 
             if not self.use_ada:
-                self.masking = MHAMasking(embed_dim=self.config.mm_hidden_size, n_patches=model_args.num_patches, n_layers=model_args.num_layers, n_head=model_args.num_head, mask_ratio=model_args.mask_ratio, use_learnable_pos_emb=model_args.use_learnable_pos_emb)
+                self.masking = MHAMasking(embed_dim=self.config.mm_hidden_size, n_patches=model_args.num_patches, n_layers=model_args.num_layers, n_head=model_args.num_head, mask_ratio=model_args.mask_ratio, use_learnable_pos_emb=model_args.use_learnable_pos_emb, padding_to_full=self.padding_to_full)
             else:
-                self.masking = AdaMAEMasking(embed_dim=self.config.mm_hidden_size, n_patches=model_args.num_patches, mask_ratio=model_args.mask_ratio, use_learnable_pos_emb=model_args.use_learnable_pos_emb)
+                self.masking = AdaMAEMasking(embed_dim=self.config.mm_hidden_size, n_patches=model_args.num_patches, mask_ratio=model_args.mask_ratio, use_learnable_pos_emb=model_args.use_learnable_pos_emb, padding_to_full=self.padding_to_full)
 
             pretrain_mm_masking = model_args.pretrain_mm_masking
             if pretrain_mm_masking is not None:
