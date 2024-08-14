@@ -4,6 +4,7 @@ import numpy as np
 from einops import rearrange
 from timm.models.vision_transformer import PatchEmbed, Block
 from timm.models.layers import trunc_normal_ as __call_trunc_normal_
+from ChatUniVi.constants import *
 
 
 def trunc_normal_(tensor, mean=0., std=1.):
@@ -36,7 +37,7 @@ class AdaMAEMasking(nn.Module):
                  mask_ratio: float = 0.9, use_learnable_pos_emb=False, norm_layer=nn.LayerNorm, **kwargs):
         super().__init__()
         self.embed_dim = embed_dim
-        self.n_patches = n_patches*64
+        self.n_patches = n_patches*MAX_IMAGE_LENGTH
 
         # TODO: fixed ratio or not
         self.mask_ratio = mask_ratio

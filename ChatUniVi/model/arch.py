@@ -361,12 +361,16 @@ class ChatUniViMetaForCausalLM(ABC):
                             cur_new_labels.append(cur_labels[image_token_end:image_token_end + 1])
                             cur_labels = cur_labels[image_token_end + 2:]
                     else:
+                        # cur_input_ids: [q1, img1, img2, q2 (assistant xxx), a, padding]
+                        # label: [ig, ig, ig, ig, a, padding]
+
+                        # cur_new_input_embeds: [q1, img1, img2, assiant + anwer]
+                        # cur_labels: [q1, img1, img2, ig, answer]
                         cur_new_input_embeds.append(self.get_model().embed_tokens(cur_input_ids[:image_token_start]))
                         cur_new_input_embeds.append(cur_image_features)
                         if labels is not None:
                             cur_new_labels.append(cur_labels[:image_token_start])
                             cur_new_labels.append(torch.full((cur_image_features.shape[0],), IGNORE_INDEX, device=labels.device, dtype=labels.dtype))
-                            # TODO: here??
                             cur_labels = cur_labels[image_token_end + 1:]
 
                 if getattr(self.config, 'tune_mm_mlp_adapter', False) and getattr(self.config, 'mm_use_im_start_end',

@@ -5,7 +5,7 @@ export WANDB_NAME="base_pretrain"
 # --pretrain_mm_masking ${motion_ckpt} \
 
 stage1_save_path="/mnt/bn/videovlm/code/themis/checkpoints/base_pretrain/stage1"
-motion_ckpt="/mnt/bn/videovlm/ckpt/video_reconstruction/checkpoints/v2_vatex_smaller/checkpoint_epoch_1_iter2000.pth"
+motion_ckpt="/mnt/bn/videovlm/ckpt/video_reconstruction/checkpoints/v2_vatex_smaller_largerclip/checkpoint_epoch_1_iter1000.pth"
 LLM_path="/mnt/bn/themis/data/LLM/vicuna-7b-v1.5"
 
 deepspeed \

@@ -42,10 +42,14 @@ def _get_rawvideo_dec(video_path, image_processor, max_frames=64, image_resoluti
         t_stride = int(round(float(fps) / sample_fps))
 
         all_pos = list(range(f_start, f_end + 1, t_stride))
-        if len(all_pos) > max_frames:
+        if len(all_pos) >= max_frames:
             sample_pos = [all_pos[_] for _ in np.linspace(0, len(all_pos) - 1, num=max_frames, dtype=int)]
         else:
-            sample_pos = all_pos
+            # TODO: here
+            # If the video has fewer frames than max_frames, you might opt to repeat some frames
+            repeat_factor = int(np.ceil(max_frames / len(all_pos)))
+            extended_frames = (list(range(f_start, f_end + 1)) * repeat_factor)[:max_frames]
+            sample_pos = sorted(set(extended_frames))
 
         patch_images = [Image.fromarray(f) for f in vreader.get_batch(sample_pos).asnumpy()]
 

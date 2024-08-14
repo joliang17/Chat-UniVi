@@ -338,8 +338,9 @@ def preprocess_multimodal(
                 replace_token = DEFAULT_IM_START_TOKEN + replace_token + DEFAULT_IM_END_TOKEN
                 vid_replace_token = DEFAULT_VID_START_TOKEN + vid_replace_token + DEFAULT_VID_END_TOKEN
 
-            sentence["value"] = sentence["value"].replace(DEFAULT_IMAGE_TOKEN, replace_token + '\n')
-            sentence['value'] = sentence['value'].replace(DEFAULT_VIDEO_TOKEN, vid_replace_token + '\n')
+            # sentence["value"] = sentence["value"].replace(DEFAULT_IMAGE_TOKEN, replace_token + '\n')
+            # sentence['value'] = sentence['value'].replace(DEFAULT_VIDEO_TOKEN, vid_replace_token + '\n')
+            sentence['value'] = sentence['value'].replace(DEFAULT_VIDEO_TOKEN, vid_replace_token)
             sentence['value'] = sentence['value'].replace('\n\n', '\n')
 
     return sources
