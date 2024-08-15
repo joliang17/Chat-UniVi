@@ -477,8 +477,6 @@ class ChatUniViMetaForCausalLM(ABC):
                 attention_mask = torch.cat((new_attn_mask_pad_left, attention_mask), dim=1)
                 assert attention_mask.shape == new_input_embeds.shape[:2]
 
-        if new_input_embeds.shape[1] != new_labels.shape[1]:
-            import pdb;pdb.set_trace()
         return None, attention_mask, past_key_values, new_input_embeds, new_labels
 
     def initialize_vision_tokenizer(self, model_args, tokenizer):
