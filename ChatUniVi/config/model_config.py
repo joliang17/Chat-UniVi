@@ -29,9 +29,25 @@ model_config_finetune = {
 model_config_pretune_motion = {
     "use_masking": True,
     "use_cluster": False,
-    "use_ada": True,
+    "use_ada": False,
     "freeze": False,
     "vision_tune": False,
+
+    "num_patches": 576, 
+    "num_layers": 2,
+    "num_head": 16, 
+    "mask_ratio": 0.9,
+    "use_learnable_pos_emb": False, 
+}
+
+model_config_finetune_motion = {
+    "use_masking": True,
+    "use_cluster": False,
+    "use_ada": False,
+    "freeze": False,
+    "mm_tune": True,
+    "vision_tune": False,
+    "padding_to_full": False,
 
     "num_patches": 576, 
     "num_layers": 2,
@@ -40,10 +56,11 @@ model_config_pretune_motion = {
     "use_learnable_pos_emb": True, 
 }
 
-model_config_finetune_motion = {
+model_config_finetune_motion_padding = {
     "use_masking": True,
     "use_cluster": False,
     "use_ada": False,
+    "padding_to_full": True,
     "freeze": False,
     "mm_tune": True,
     "vision_tune": False,

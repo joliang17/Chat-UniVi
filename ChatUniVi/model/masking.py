@@ -40,7 +40,6 @@ class AdaMAEMasking(nn.Module):
         self.n_patches = n_patches*MAX_IMAGE_LENGTH
         self.padding_to_full = padding_to_full
 
-        # TODO: fixed ratio or not
         self.mask_ratio = mask_ratio
         self.visible_patches = int(self.n_patches * (1 - mask_ratio))
         print("No. of visible patches selected for pre-training: {}".format(self.visible_patches))
@@ -113,17 +112,20 @@ class AdaMAEMasking(nn.Module):
         # prob_patch.shape: [B, T*N]
         prob_patch, vis_idx, mask = self.get_mask(image_feat)
 
-        # generate masked features
-        # pos_embed.shape: 1, N, D
-        image_feat = image_feat + self.pos_embed.type_as(image_feat).to(image_feat.device).clone().detach()
-
         B, NT, D1 = image_feat.shape
         if self.padding_to_full:
             # replace masking part with zero
             masking_part = image_feat[mask]
             image_feat[mask] = torch.zeros_like(masking_part, device=image_feat.device, dtype=image_feat.dtype)
+            
+            # generate masked features
+            # pos_embed.shape: 1, N, D
+            image_feat = image_feat + self.pos_embed.type_as(image_feat).to(image_feat.device).clone().detach()
             next_img_vis = image_feat.reshape(B, -1, D1)
         else:
+            # generate masked features
+            # pos_embed.shape: 1, N, D
+            image_feat = image_feat + self.pos_embed.type_as(image_feat).to(image_feat.device).clone().detach()
             # ~mask means visible shape: B, N2, N2=N*T * mask_ratio
             next_img_vis = image_feat[~mask].reshape(B, -1, D1)
             
@@ -146,7 +148,6 @@ class MHAMasking(nn.Module):
         self.n_head = n_head
         self.padding_to_full = padding_to_full
         
-        # TODO: fixed ratio or not
         self.mask_ratio = mask_ratio
         self.visible_patches = int(n_patches * (1 - mask_ratio))
         print("No. of visible patches selected for pre-training: {}".format(self.visible_patches))
@@ -208,19 +209,22 @@ class MHAMasking(nn.Module):
         # prob_patch.shape: [B * (T - 1), N]
         prob_patch, vis_idx, mask = self.get_mask(prev_img, next_img)
 
-        # generate masked features
-        # pos_embed.shape: 1, N, D
-        next_img = next_img + self.pos_embed.type_as(next_img).to(next_img.device).clone().detach()
-
         BT, _, D1 = next_img.shape
         if self.padding_to_full:
             # replace masking part with zero
-            masking_part = image_feat[mask]
-            image_feat[mask] = torch.zeros_like(masking_part, device=image_feat.device, dtype=image_feat.dtype)
-            next_img_vis = image_feat.reshape(B, -1, D1)
+            masking_part = next_img[mask]
+            next_img[mask] = torch.zeros_like(masking_part, device=next_img.device, dtype=next_img.dtype)
+            
+            # generate masked features
+            # pos_embed.shape: 1, N, D
+            next_img = next_img + self.pos_embed.type_as(next_img).to(next_img.device).clone().detach()
+            next_img_vis = next_img.reshape(BT, -1, D1)
         else:
+            # generate masked features
+            # pos_embed.shape: 1, N, D
             # ~mask means visible shape: (B * T - 1), N2, N2=N * mask_ratio
-            next_img_vis = image_feat[~mask].reshape(B, -1, D1)
+            next_img = next_img + self.pos_embed.type_as(next_img).to(next_img.device).clone().detach()
+            next_img_vis = next_img[~mask].reshape(BT, -1, D1)
             
         next_img_vis = rearrange(next_img_vis, '(b t) k d -> b t k d', b=B, t=T - 1)
         mask = rearrange(mask, '(b t) n -> b t n', b=B, t=T - 1)

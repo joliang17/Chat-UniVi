@@ -7,6 +7,7 @@ ModelConfig = {
     "PRETUNE_MOT": model_config_pretune_motion,
     "FINETUNE": model_config_finetune,
     "FINETUNE_MOT": model_config_finetune_motion,
+    "FINETUNE_MOT_PAD": model_config_finetune_motion_padding,
 }
 
 
