@@ -17,20 +17,27 @@ def read_jsonl(file):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="question-answer-generation-using-gpt-3")
-    parser.add_argument("--pred_path", required=True, help="The path to file containing prediction.")
-    parser.add_argument("--output_dir", required=True, help="The path to save annotation json files.")
-    parser.add_argument("--output_json", required=True, help="The path to save annotation final combined json file.")
-    parser.add_argument("--api_key", required=True, help="OpenAI API key.")
-    parser.add_argument("--num_tasks", required=True, type=int, help="Number of splits.")
+    parser.add_argument("--pred_path", required=False, default="/mnt/bn/yijun-multimodal/themis/themis/eval/answers/activitynet_answer_motion.json", help="The path to file containing prediction.")
+    parser.add_argument("--output_dir", required=False, default="activity_qa_net_motion", help="The path to save annotation json files.")
+    parser.add_argument("--output_json", required=False, default="activity_qa_base.json", help="The path to save annotation final combined json file.")
+    parser.add_argument("--api_key", required=False, default='', help="OpenAI API key.")
+    parser.add_argument("--num_tasks", required=False, default=1, type=int, help="Number of splits.")
     args = parser.parse_args()
     return args
 
 
-def annotate(prediction_set, caption_files, output_dir):
+def annotate(api_key, prediction_set, caption_files, output_dir):
     """
     Evaluates question and answer pairs using GPT-3
     Returns a score for correctness.
     """
+    client = openai.AzureOpenAI(
+        azure_endpoint="https://search-va.byteintl.net/gpt/openapi/online/multimodal/crawl/",
+        api_version="2023-09-01-preview",
+        api_key=api_key
+    )
+
+    # print(f"Calling model {model_name} ..")
     for file in caption_files:
         key = file[:-5] # Strip file extension
         qa_set = prediction_set[key]
@@ -39,8 +46,8 @@ def annotate(prediction_set, caption_files, output_dir):
         pred = qa_set['pred']
         try:
             # Compute the correctness score
-            completion = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
+            completion = client.chat.completions.create(
+                model="gpt-4o-2024-05-13",
                 messages=[
                     {
                         "role": "system",
@@ -68,7 +75,7 @@ def annotate(prediction_set, caption_files, output_dir):
                 ]
             )
             # Convert response to a Python dictionary.
-            response_message = completion["choices"][0]["message"]["content"]
+            response_message = completion.choices[0].message.content
             response_dict = ast.literal_eval(response_message)
             result_qa_pair = [response_dict, qa_set]
 
@@ -130,38 +137,42 @@ def main():
         qa_set = {"q": question, "a": answer, "pred": pred}
         prediction_set[id] = qa_set
 
-    # Set the OpenAI API key.
-    openai.api_key = args.api_key
+    # # Set the OpenAI API key.
+    # openai.api_key = args.api_key
     num_tasks = args.num_tasks
 
-    # While loop to ensure that all captions are processed.
-    while True:
-        try:
-            # Files that have not been processed yet.
-            completed_files = os.listdir(output_dir)
-            print(f"completed_files: {len(completed_files)}")
+    # # While loop to ensure that all captions are processed.
+    # # while True:
+    try:
+        # Files that have not been processed yet.
+        completed_files = os.listdir(output_dir)
+        print(f"completed_files: {len(completed_files)}")
 
-            # Files that have not been processed yet.
-            incomplete_files = [f for f in caption_files if f not in completed_files]
-            print(f"incomplete_files: {len(incomplete_files)}")
+        # Files that have not been processed yet.
+        incomplete_files = [f for f in caption_files if f not in completed_files]
+        print(f"incomplete_files: {len(incomplete_files)}")
 
-            # Break the loop when there are no incomplete files
-            if len(incomplete_files) == 0:
-                break
-            if len(incomplete_files) <= num_tasks:
-                num_tasks = 1
+        # Break the loop when there are no incomplete files
+        # if len(incomplete_files) == 0:
+        #     break
+        if len(incomplete_files) <= num_tasks:
+            num_tasks = 1
 
-            # Split tasks into parts.
-            part_len = len(incomplete_files) // num_tasks
-            all_parts = [incomplete_files[i:i + part_len] for i in range(0, len(incomplete_files), part_len)]
-            task_args = [(prediction_set, part, args.output_dir) for part in all_parts]
+        # TODO:
+        # only generate 1k samples for evaluate
+        incomplete_files = incomplete_files[:1000]
 
-            # Use a pool of workers to process the files in parallel.
-            with Pool() as pool:
-                pool.starmap(annotate, task_args)
+        # Split tasks into parts.
+        part_len = len(incomplete_files) // num_tasks
+        all_parts = [incomplete_files[i:i + part_len] for i in range(0, len(incomplete_files), part_len)]
+        task_args = [(args.api_key, prediction_set, part, args.output_dir) for part in all_parts]
+        # Use a pool of workers to process the files in parallel.
+        # with Pool() as pool:
+        #     pool.starmap(annotate, task_args)
+        annotate(args.api_key, prediction_set, all_parts[0], args.output_dir)
 
-        except Exception as e:
-            print(f"Error: {e}")
+    except Exception as e:
+        print(f"Error: {e}")
 
     # Combine all the processed files into one
     combined_contents = {}
@@ -170,6 +181,8 @@ def main():
     # Iterate through json files
     for file_name in os.listdir(output_dir):
         if file_name.endswith(".json"):
+            if int(file_name.split('_')[-1].split('.json')[0]) >= 1000:
+                continue
             file_path = os.path.join(output_dir, file_name)
             with open(file_path, "r") as json_file:
                 content = json.load(json_file)

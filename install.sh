@@ -6,3 +6,5 @@ pip install flash-attn --no-build-isolation  # If you only intend to perform inf
 pip uninstall -y byted-wandb
 pip uninstall -y wandb
 pip install byted-wandb
+pip install httpx==0.23.0
+pip install openai

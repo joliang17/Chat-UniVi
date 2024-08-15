@@ -1,14 +1,16 @@
 
+git config --global --add safe.directory /mnt/bn/yijun-multimodal/Chat-UniVi
+
 export WANDB_PROJECT="videovlm_motion"
-export WANDB_NAME="motions_finetune"
+export WANDB_NAME="motion_finetune"
 
 LLM_path="/mnt/bn/themis/data/LLM/vicuna-7b-v1.5"
 motion_ckpt="/mnt/bn/videovlm/ckpt/video_reconstruction/checkpoints/v2_vatex_smaller_largerclip/checkpoint_epoch_1_iter1000.pth"
 stage1_save_path="/mnt/bn/videovlm/code/themis/checkpoints/base_pretrain/stage1_4"
-stage2_save_path="/mnt/bn/videovlm/code/themis/checkpoints/motions_finetune/stage2"
+stage2_save_path="/mnt/bn/videovlm/code/themis/checkpoints/ada_finetune/stage2"
 
 deepspeed \
---include localhost:0,1,2,3 \
+--include localhost:0,1 \
 --master_port=29601 \
 ChatUniVi/train/train_mem.py \
 --deepspeed scripts/zero2.json \
@@ -18,19 +20,18 @@ ChatUniVi/train/train_mem.py \
 --dataset_use FINETUNE \
 --vision_tower openai/clip-vit-large-patch14-336 \
 --pretrain_mm_mlp_adapter ${stage1_save_path}/mm_projector.bin \
---pretrain_mm_masking ${motion_ckpt} \
 --mm_vision_select_layer -2 \
 --mm_use_im_start_end False \
 --mm_use_im_patch_token False \
 --bf16 True \
 --output_dir ${stage2_save_path} \
 --num_train_epochs 2 \
---per_device_train_batch_size 2 \
+--per_device_train_batch_size 1 \
 --per_device_eval_batch_size 4 \
 --gradient_accumulation_steps 1 \
 --evaluation_strategy "no" \
 --save_strategy "steps" \
---save_steps 50000 \
+--save_steps 1000 \
 --save_total_limit 1 \
 --learning_rate 2e-5 \
 --weight_decay 0. \

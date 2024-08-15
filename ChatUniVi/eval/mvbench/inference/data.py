@@ -3,13 +3,14 @@ import os
 from torch.utils.data import Dataset
 import torch
 import subprocess
+from PIL import Image
 import numpy as np
 from ChatUniVi.constants import *
 from decord import VideoReader, cpu
-from eval.video_encoding import _get_rawvideo_dec, read_frame_mod, read_gif_mod
+from ChatUniVi.model.dataloader import _get_rawvideo_dec
 
 
-def _get_rawvideo_dec(video_path, image_processor, max_frames=MAX_IMAGE_LENGTH, image_resolution=224, video_framerate=1, s=None, e=None):
+def _get_rawvideo_dec(video_path, image_processor, max_frames=MAX_IMAGE_LENGTH, image_resolution=336, video_framerate=1, s=None, e=None):
     # speed up video decode via decord.
     video_mask = np.zeros(max_frames, dtype=np.int64)
     max_video_length = 0

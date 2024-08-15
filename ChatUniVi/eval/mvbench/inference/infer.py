@@ -1,4 +1,6 @@
 import argparse
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 from tqdm import tqdm
 import shortuuid
 from ChatUniVi.constants import *
@@ -11,28 +13,29 @@ from torch.utils.data import DataLoader, DistributedSampler
 import traceback
 
 
+# data: https://huggingface.co/datasets/OpenGVLab/MVBench/tree/main/video
 mvbench_data_list = {
-    "Episodic Reasoning": ("episodic_reasoning.json", "your_data_path/tvqa/frames_fps3_hq/", "frame", True),
+    # "Episodic Reasoning": ("episodic_reasoning.json", "your_data_path/tvqa/frames_fps3_hq/", "frame", True),
     "Action Sequence": ("action_sequence.json", "your_data_path/star/Charades_v1_480/", "video", True),
     "Action Prediction": ("action_prediction.json", "your_data_path/star/Charades_v1_480/", "video", True),
     "Action Antonym": ("action_antonym.json", "your_data_path/ssv2_video/", "video", False),
-    "Fine-grained Action": ("fine_grained_action.json", "your_data_path/Moments_in_Time_Raw/videos/", "video", False),
-    "Unexpected Action": ("unexpected_action.json", "your_data_path/FunQA_test/test/", "video", False),
-    "Object Existence": ("object_existence.json", "your_data_path/clevrer/video_validation/", "video", False),
-    "Object Interaction": ("object_interaction.json", "your_data_path/star/Charades_v1_480/", "video", True),
-    "Object Shuffle": ("object_shuffle.json", "your_data_path/perception/videos/", "video", False),
-    "Moving Direction": ("moving_direction.json", "your_data_path/clevrer/video_validation/", "video", False),
-    "Action Localization": ("action_localization.json", "your_data_path/sta/sta_video/", "video", True),
-    "Scene Transition": ("scene_transition.json", "your_data_path/scene_qa/video/", "video", False),
-    "Action Count": ("action_count.json", "your_data_path/perception/videos/", "video", False),
-    "Moving Count": ("moving_count.json", "your_data_path/clevrer/video_validation/", "video", False),
-    "Moving Attribute": ("moving_attribute.json", "your_data_path/clevrer/video_validation/", "video", False),
-    "State Change": ("state_change.json", "your_data_path/perception/videos/", "video", False),
-    "Fine-grained Pose": ("fine_grained_pose.json", "your_data_path/nturgbd/", "video", False),
-    "Character Order": ("character_order.json", "your_data_path/perception/videos/", "video", False),
-    "Egocentric Navigation": ("egocentric_navigation.json", "your_data_path/vlnqa/", "video", False),
-    "Counterfactual Inference": (
-        "counterfactual_inference.json", "your_data_path/clevrer/video_validation/", "video", False),
+    # "Fine-grained Action": ("fine_grained_action.json", "your_data_path/Moments_in_Time_Raw/videos/", "video", False),
+    # "Unexpected Action": ("unexpected_action.json", "your_data_path/FunQA_test/test/", "video", False),
+    # "Object Existence": ("object_existence.json", "your_data_path/clevrer/video_validation/", "video", False),
+    # "Object Interaction": ("object_interaction.json", "your_data_path/star/Charades_v1_480/", "video", True),
+    # "Object Shuffle": ("object_shuffle.json", "your_data_path/perception/videos/", "video", False),
+    # "Moving Direction": ("moving_direction.json", "your_data_path/clevrer/video_validation/", "video", False),
+    # "Action Localization": ("action_localization.json", "your_data_path/sta/sta_video/", "video", True),
+    # "Scene Transition": ("scene_transition.json", "your_data_path/scene_qa/video/", "video", False),
+    # "Action Count": ("action_count.json", "your_data_path/perception/videos/", "video", False),
+    # "Moving Count": ("moving_count.json", "your_data_path/clevrer/video_validation/", "video", False),
+    # "Moving Attribute": ("moving_attribute.json", "your_data_path/clevrer/video_validation/", "video", False),
+    # "State Change": ("state_change.json", "your_data_path/perception/videos/", "video", False),
+    # "Fine-grained Pose": ("fine_grained_pose.json", "your_data_path/nturgbd/", "video", False),
+    # "Character Order": ("character_order.json", "your_data_path/perception/videos/", "video", False),
+    # "Egocentric Navigation": ("egocentric_navigation.json", "your_data_path/vlnqa/", "video", False),
+    # "Counterfactual Inference": (
+    #     "counterfactual_inference.json", "your_data_path/clevrer/video_validation/", "video", False),
 }
 
 
@@ -52,23 +55,25 @@ def eval_model(args):
     model.resize_token_embeddings(len(tokenizer))
 
     vision_tower = model.get_vision_tower()
-    vision_tower.load_model(model.config.mm_vision_tower)
+    if not vision_tower.is_loaded:
+        vision_tower.load_model()
     image_processor = vision_tower.image_processor
 
     model = model.to("cuda")
 
     # TODO: run inference on MVbench
-    dataset = EvalDatasetMvBench(args.question_dir, args.video_folder, image_processor, mvbench_data_list)
-    distributed_sampler = DistributedSampler(dataset, rank=args.rank, shuffle=False)
-    dataloader = DataLoader(dataset, batch_size=args.batch_size_per_gpu, num_workers=4, sampler=distributed_sampler)
+    dataset = EvalDatasetMvBench(args.question_dir, args.video_folder, image_processor, mvbench_data_list, max_frames=MAX_IMAGE_LENGTH)
+    # distributed_sampler = DistributedSampler(dataset, rank=args.rank, shuffle=False)
+    # dataloader = DataLoader(dataset, batch_size=args.batch_size_per_gpu, num_workers=4, sampler=distributed_sampler)
+    dataloader = DataLoader(dataset, batch_size=args.batch_size_per_gpu, num_workers=4, )
 
-    stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
-    keywords = [stop_str]
-    stopping_criteria = KeywordsStoppingCriteria(keywords, tokenizer, input_ids)
 
     for (idx, sample_set, image_tensor, slice_len) in tqdm(dataloader):
         idx, sample_set, image_tensor, slice_len = int(idx[0]), sample_set[
             0], image_tensor, int(slice_len[0])
+
+        if isinstance(image_tensor, tuple):
+            continue
 
         sample = sample_set
         qs = sample['Q'][0]
@@ -89,17 +94,20 @@ def eval_model(args):
                                               return_tensors='pt').unsqueeze(0).cuda()
 
             # stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
-            stop_str = "<|end|>"
+            stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
+            keywords = [stop_str]
+            stopping_criteria = KeywordsStoppingCriteria(keywords, tokenizer, input_ids)
+
 
             with torch.inference_mode():
                 output_ids = model.generate(
                     input_ids,
-                    images=image_tensor.unsqueeze(0).half().cuda(),
+                    images=image_tensor.squeeze().half().cuda(),
                     do_sample=True if args.temperature > 0 else False,
                     temperature=args.temperature,
                     top_p=args.top_p,
                     num_beams=args.num_beams,
-                    max_new_tokens=args.max_new_tokens,
+                    max_new_tokens=1024,
                     use_cache=True,
                     stopping_criteria=[stopping_criteria])
 
@@ -138,13 +146,13 @@ def eval_model(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-path", type=str, default="MBZUAI/VideoGPT-plus_Phi3-mini-4k/mvbench")
-    parser.add_argument("--model-base", type=str, default="microsoft/Phi-3-mini-4k-instruct")
-    parser.add_argument("--video-folder", type=str, default="OpenGVLab/MVBench/video")
-    parser.add_argument("--question-dir", type=str, default="OpenGVLab/MVBench/json")
-    parser.add_argument("--output-dir", type=str, default="MBZUAI/VideoGPT-plus_Phi3-mini-4k/mvbench_eval")
-    parser.add_argument("--conv-mode", type=str, default="simple")
-    parser.add_argument("--temperature", type=float, default=1)
+    parser.add_argument("--model-path", type=str, default="/mnt/bn/videovlm/code/themis/checkpoints/motion_finetune/stage2/checkpoint-49000")
+    parser.add_argument("--model-base", type=str, default=None)
+    parser.add_argument("--video-folder", type=str, default="/mnt/bn/videovlm/data/public_data/MVBench/video")
+    parser.add_argument("--question-dir", type=str, default="/mnt/bn/videovlm/data/public_data/MVBench/json")
+    parser.add_argument("--output-dir", type=str, default="mvbench_eval_motion")
+    parser.add_argument("--conv-mode", type=str, default="v1")
+    parser.add_argument("--temperature", type=float, default=0.2)
     parser.add_argument("--top_p", type=float, default=None)
     parser.add_argument("--num_beams", type=int, default=1)
 
@@ -155,7 +163,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    init_distributed_mode(args)
+    # init_distributed_mode(args)
 
     os.makedirs(args.output_dir, exist_ok=True)
 

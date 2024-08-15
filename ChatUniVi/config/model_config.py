@@ -53,7 +53,7 @@ model_config_finetune_motion = {
     "num_layers": 2,
     "num_head": 16, 
     "mask_ratio": 0.9,
-    "use_learnable_pos_emb": True, 
+    "use_learnable_pos_emb": False, 
 }
 
 model_config_finetune_motion_padding = {
@@ -69,5 +69,5 @@ model_config_finetune_motion_padding = {
     "num_layers": 2,
     "num_head": 16, 
     "mask_ratio": 0.9,
-    "use_learnable_pos_emb": True, 
+    "use_learnable_pos_emb": False, 
 }

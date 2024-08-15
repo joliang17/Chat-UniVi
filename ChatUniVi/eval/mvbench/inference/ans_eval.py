@@ -5,7 +5,9 @@ import argparse
 
 
 def check_ans(pred, gt):
-    flag = False
+    flag = False    
+    if pred == '':
+        return flag 
 
     pred_list = pred.lower().split(' ')
     pred_option, pred_content = pred_list[1], ' '.join(pred_list[1:])
@@ -55,6 +57,8 @@ def main(args):
 
     result_list = []
     for task_type, v in types.items():
+        if task_type not in acc_dict:
+            continue
         print('-' * 30, task_type, '-' * 30)
         Acc = acc_dict[task_type][0] / acc_dict[task_type][1] * 100
         print(f"{task_type}  Acc: {Acc :.2f}%")
@@ -65,7 +69,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output_dir", type=str, default="MBZUAI/VideoGPT-plus_Phi3-mini-4k/mvbench_eval")
+    parser.add_argument("--output_dir", type=str, default="/mnt/bn/yijun-multimodal/Chat-UniVi/mvbench_eval_baseline")
     args = parser.parse_args()
     main(args)
 

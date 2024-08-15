@@ -1,6 +1,7 @@
 import argparse
 import torch
 import os
+# os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 import json
 from tqdm import tqdm
 import shortuuid
@@ -31,7 +32,7 @@ def get_chunk(lst, n, k):
     return chunks[k]
 
 
-def _get_rawvideo_dec(video_path, image_processor, max_frames=MAX_IMAGE_LENGTH, image_resolution=224, video_framerate=1, s=None, e=None):
+def _get_rawvideo_dec(video_path, image_processor, max_frames=MAX_IMAGE_LENGTH, image_resolution=336, video_framerate=1, s=None, e=None):
     # speed up video decode via decord.
     video_mask = np.zeros(max_frames, dtype=np.int64)
     max_video_length = 0
@@ -214,12 +215,12 @@ def eval_model(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-path", type=str, default="facebook/opt-350m")
+    parser.add_argument("--model-path", type=str, default="/mnt/bn/videovlm/code/themis/checkpoints/motion_finetune_padding/stage2/checkpoint-15000/")
     parser.add_argument("--model-base", type=str, default=None)
-    parser.add_argument("--video-folder", type=str, default="")
-    parser.add_argument("--question-file", type=str, default="tables/question.jsonl")
-    parser.add_argument("--answers-list", type=str, default="tables/answers_list.json")
-    parser.add_argument("--answers-file", type=str, default="answer.jsonl")
+    parser.add_argument("--video-folder", type=str, default="/mnt/bn/videovlm/data/public_data/activitynet_qa/all_test/")
+    parser.add_argument("--question-file", type=str, default="/mnt/bn/yijun-multimodal/themis/themis/eval/questions/video_qa/activitynet_qa.json")
+    parser.add_argument("--answers-list", type=str, default="/mnt/bn/yijun-multimodal/themis/themis/eval/questions/video_qa/activitynet_a_list.json")
+    parser.add_argument("--answers-file", type=str, default="/mnt/bn/yijun-multimodal/themis/themis/eval/answers/activitynet_answer_motion_pad.json")
     parser.add_argument("--conv-mode", type=str, default="v1")
     parser.add_argument("--num-chunks", type=int, default=1)
     parser.add_argument("--chunk-idx", type=int, default=0)

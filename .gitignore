@@ -11,6 +11,7 @@ DINOv2/
 # log file
 *.log
 *.out
+*.json
 log/*
 
 .idea/
